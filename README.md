@@ -18,3 +18,24 @@ Demonstrate data cleaning and transformation using R, Python and related tools t
 
 ## Key statistics and insights
 [key results and insights here]
+
+## Repo Structure
+covid19-australia-eda/
+├── README.md
+├── data/
+│   ├── raw/          # original data files
+│   └── processed/    # cleaned/transformed data
+├── notebooks/
+│   ├── 01_data_loading_cleaning.ipynb  # Python
+│   └── 02_eda_analysis.ipynb           # Python
+├── analysis/
+│   ├── 01_data_exploration.Rmd         # R
+│   └── 02_visualization.Rmd            # R
+├── scripts/
+│   ├── fetch_data.py                   # Python
+│   └── process_data.R                  # R
+├── results/
+│   ├── figures/
+│   └── reports/
+├── requirements.txt                    # Python dependencies
+└── .Rprofile or renv.lock              # R dependencies
