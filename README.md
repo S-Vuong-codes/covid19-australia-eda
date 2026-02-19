@@ -20,6 +20,7 @@ Demonstrate data cleaning and transformation using R, Python and related tools t
 [key results and insights here]
 
 ## Repo Structure
+'''
 covid19-australia-eda/
 ├── README.md
 ├── data/
@@ -39,3 +40,4 @@ covid19-australia-eda/
 │   └── reports/
 ├── requirements.txt                    # Python dependencies
 └── .Rprofile or renv.lock              # R dependencies
+'''
