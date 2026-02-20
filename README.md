@@ -13,12 +13,12 @@ Demonstrate data cleaning and transformation using R, Python and related tools t
 ## Technologies Used
 [insert the tools here e.g. R, Python, specific libraries]
 *Python*
-*jupyter - Run Jupyter notebooks
-*pandas - Data manipulation
-*numpy - Numerical computing
-*matplotlib & seaborn - Visualizations
-*scipy - Statistical functions
-*scikit-learn - Machine learning basics
+* jupyter - Run Jupyter notebooks
+* pandas - Data manipulation
+* numpy - Numerical computing
+* matplotlib & seaborn - Visualizations
+* scipy - Statistical functions
+* scikit-learn - Machine learning basics
 
 
 ## Instructions to run analyses
