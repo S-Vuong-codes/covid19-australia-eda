@@ -11,7 +11,8 @@ Demonstrate data cleaning and transformation using R, Python and related tools t
 [insert findings and visualisations here]
 
 ## Technologies Used
-[insert the tools here e.g. R, Python, specific libraries]
+Python was used for data ingestion, cleaning, and exploratory analysis, while R was used for statistical modeling, advanced visualization, and final reporting.
+
 *Python*
 * jupyter - Run Jupyter notebooks
 * pandas - Data manipulation
@@ -20,6 +21,16 @@ Demonstrate data cleaning and transformation using R, Python and related tools t
 * scipy - Statistical functions
 * scikit-learn - Machine learning basics
 
+*R*
+* tidyverse (dplyr, readr, ggplot2) – Data wrangling and visualization
+* lubridate – Date/time handling
+* skimr – Exploratory data summaries
+* DataExplorer – Automated EDA reports
+* scales – Visualization formatting
+* corrplot – Correlation analysis
+* tseries & forecast – Time series analysis and modeling
+* R Markdown – Reproducible statistical reporting
+* renv – Dependency management
 
 ## Instructions to run analyses
 [instructions here]
