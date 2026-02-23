@@ -39,7 +39,7 @@ covid19-australia-eda/
 │   └── 02_eda_analysis.ipynb           # Python
 ├── analysis/
 │   ├── 01_data_exploration.Rmd         # R
-│   └── 02_visualization.Rmd            # R
+│   └── 02_statistical_analysis.Rmd     # R
 ├── scripts/
 │   ├── fetch_data.py                   # Python
 │   └── process_data.R                  # R
