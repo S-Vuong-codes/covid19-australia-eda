@@ -1,0 +1,391 @@
+---
+title: "COVID-19 Statistical Analysis and Hypothesis Testing"
+author: "Sally Vuong"
+date: "`r Sys.Date()`"
+output:
+  html_document:
+    toc: true
+    toc_float: true
+    number_sections: true
+    theme: flatly
+    highlight: tango
+---
+
+```{r Setup, include=FALSE}
+knitr::opts_chunk$set(
+  echo = TRUE,
+  warning = FALSE,
+  message = FALSE,
+  fig.width = 12,
+  fig.height = 6
+)
+```
+
+## Load Libraries and Data
+```{r Load Libraries and Data}
+# Load required libraries
+library(tidyverse)
+library(readr)
+library(dplyr)
+library(lubridate)
+library(ggplot2)
+library(scales)
+library(corrplot)
+library(tseries)
+library(forecast)
+
+cat("✓ Libraries loaded successfully\n")
+
+# Load the cleaned CSV file from Python
+df <- read_csv("../data/processed/australia_covid_cleaned.csv")
+df$date <- as.Date(df$date)
+
+cat("✓ Data loaded successfully\n")
+cat("Dataset dimensions:", nrow(df), "rows x", ncol(df), "columns\n")
+cat("Date range:", min(df$date), "to", max(df$date), "\n")
+```
+
+## Correlation Analysis
+```{r Correlation Analysis}
+# Select numeric columns for correlation analysis
+numeric_cols <- df %>%
+  select(new_cases, new_deaths, new_vaccinations, 
+         people_vaccinated, vaccination_rate, case_fatality_rate) %>%
+  names()
+
+# Create correlation matrix
+correlation_matrix <- df %>%
+  select(all_of(numeric_cols)) %>%
+  cor(use = "complete.obs")
+
+cat("✓ Correlation matrix computed\n")
+```
+
+```{r Pearson Correlation}
+cat("\n=== PEARSON CORRELATION MATRIX ===\n\n")
+print(round(correlation_matrix, 4))
+
+cat("\n\n=== KEY CORRELATIONS WITH NEW CASES ===\n")
+cases_corr <- correlation_matrix["new_cases", ] %>%
+  sort(decreasing = TRUE)
+print(round(cases_corr, 4))
+```
+
+```{r Test significance of key correlations}
+cat("\n=== CORRELATION SIGNIFICANCE TESTS ===\n\n")
+
+# New Cases vs Vaccination Rate
+corr_test1 <- cor.test(df$new_cases, df$vaccination_rate, 
+                       use = "complete.obs", method = "pearson")
+
+cat("1. NEW CASES vs VACCINATION RATE\n")
+cat("   Correlation coefficient:", round(corr_test1$estimate, 4), "\n")
+cat("   P-value:", format(corr_test1$p.value, scientific = TRUE), "\n")
+cat("   Significant:", ifelse(corr_test1$p.value < 0.05, "YES ✓", "NO"), "\n\n")
+
+# New Cases vs New Deaths
+corr_test2 <- cor.test(df$new_cases, df$new_deaths, 
+                       use = "complete.obs", method = "pearson")
+
+cat("2. NEW CASES vs NEW DEATHS\n")
+cat("   Correlation coefficient:", round(corr_test2$estimate, 4), "\n")
+cat("   P-value:", format(corr_test2$p.value, scientific = TRUE), "\n")
+cat("   Significant:", ifelse(corr_test2$p.value < 0.05, "YES ✓", "NO"), "\n\n")
+
+# Case Fatality Rate vs Vaccination Rate
+corr_test3 <- cor.test(df$case_fatality_rate, df$vaccination_rate, 
+                       use = "complete.obs", method = "pearson")
+
+cat("3. CASE FATALITY RATE vs VACCINATION RATE\n")
+cat("   Correlation coefficient:", round(corr_test3$estimate, 4), "\n")
+cat("   P-value:", format(corr_test3$p.value, scientific = TRUE), "\n")
+cat("   Significant:", ifelse(corr_test3$p.value < 0.05, "YES ✓", "NO"), "\n\n")
+
+# People Vaccinated vs Total Cases
+corr_test4 <- cor.test(df$people_vaccinated, df$total_cases, 
+                       use = "complete.obs", method = "pearson")
+
+cat("4. PEOPLE VACCINATED vs TOTAL CASES\n")
+cat("   Correlation coefficient:", round(corr_test4$estimate, 4), "\n")
+cat("   P-value:", format(corr_test4$p.value, scientific = TRUE), "\n")
+cat("   Significant:", ifelse(corr_test4$p.value < 0.05, "YES ✓", "NO"), "\n")
+```
+
+```{r Visualize correlation matrix}
+corrplot(correlation_matrix, 
+         method = "circle",
+         type = "upper",
+         diag = TRUE,
+         addCoef.col = "black",
+         number.cex = 0.8,
+         title = "Correlation Matrix - COVID-19 Variables",
+         mar = c(0, 0, 2, 0))
+```
+
+## Trend Analysis
+```{r Computing Trends}
+# Calculate trend using linear regression
+trend_model <- lm(new_cases ~ as.numeric(date), data = df)
+
+# Calculate moving averages
+df <- df %>%
+  mutate(
+    MA_7 = zoo::rollmean(new_cases, k = 7, fill = NA),
+    MA_14 = zoo::rollmean(new_cases, k = 14, fill = NA),
+    MA_30 = zoo::rollmean(new_cases, k = 30, fill = NA)
+  )
+
+cat("✓ Trend analysis computed\n")
+```
+
+```{r Trend Analysis}
+cat("\n=== CASES TREND ANALYSIS ===\n\n")
+
+cat("Linear Regression Model (Cases ~ Time):\n")
+cat("Intercept:", round(coef(trend_model)[1], 2), "\n")
+cat("Slope (cases/day):", round(coef(trend_model)[2], 4), "\n")
+cat("R-squared:", round(summary(trend_model)$r.squared, 4), "\n")
+cat("P-value:", format(summary(trend_model)$coefficients[2, 4], scientific = TRUE), "\n\n")
+
+# Interpret trend
+slope <- coef(trend_model)[2]
+if(slope > 0) {
+  cat("Interpretation: Slight INCREASE in cases over time\n")
+} else if(slope < 0) {
+  cat("Interpretation: Slight DECREASE in cases over time\n")
+} else {
+  cat("Interpretation: No clear trend\n")
+}
+
+# Calculate rate of change
+recent_7day <- mean(tail(df$new_cases, 7), na.rm = TRUE)
+previous_7day <- mean(df$new_cases[(nrow(df)-14):(nrow(df)-7)], na.rm = TRUE)
+pct_change <- ((recent_7day - previous_7day) / previous_7day) * 100
+
+cat("\nRecent Trend (Last 14 days):\n")
+cat("Previous 7-day average:", round(previous_7day, 0), "\n")
+cat("Recent 7-day average:", round(recent_7day, 0), "\n")
+cat("Percent change:", round(pct_change, 2), "%\n")
+cat("Direction:", ifelse(pct_change > 0, "↑ INCREASING", "↓ DECREASING"), "\n")
+```
+
+```{r Plot cases with moving averages}
+ggplot(df, aes(x = date)) +
+  geom_line(aes(y = new_cases), color = "lightblue", alpha = 0.5, linewidth = 0.5) +
+  geom_line(aes(y = MA_7), color = "steelblue", linewidth = 1, label = "7-day MA") +
+  geom_line(aes(y = MA_14), color = "darkblue", linewidth = 1, label = "14-day MA") +
+  geom_smooth(aes(y = new_cases), method = "loess", color = "red", 
+              se = TRUE, alpha = 0.2, linewidth = 1) +
+  labs(
+    title = "COVID-19 Daily Cases with Trend Lines",
+    x = "Date",
+    y = "Number of Cases",
+    color = "Trend"
+  ) +
+  theme_minimal() +
+  theme(
+    plot.title = element_text(face = "bold", size = 14),
+    legend.position = "top"
+  )
+
+ggsave("../results/figures/07_trend_analysis.png", width = 14, height = 6, dpi = 300)
+```
+
+## Time Series Decomposition
+```{r Time series decomposition analysis}
+# Create time series object
+ts_cases <- ts(df$new_cases, frequency = 365)
+
+# Decompose using STL (Seasonal and Trend decomposition using Loess)
+decomposed <- stl(ts_cases, s.window = "periodic")
+
+# Extract components
+df$trend <- as.numeric(decomposed$time.series[, "trend"])
+df$seasonal <- as.numeric(decomposed$time.series[, "seasonal"])
+df$remainder <- as.numeric(decomposed$time.series[, "remainder"])
+
+cat("✓ Time series decomposition completed\n")
+```
+
+```{r Plotting Decomposition}
+# Plot decomposition
+plot(decomposed, main = "Time Series Decomposition - COVID-19 Cases")
+```
+
+```{r Time Series Summary, echo=FALSE}
+cat("\n=== TIME SERIES DECOMPOSITION SUMMARY ===\n\n")
+
+cat("Trend Component:\n")
+cat("  Min:", round(min(df$trend, na.rm = TRUE), 0), "\n")
+cat("  Max:", round(max(df$trend, na.rm = TRUE), 0), "\n")
+cat("  Current:", round(tail(df$trend, 1), 0), "\n\n")
+
+cat("Seasonal Component (Amplitude):\n")
+cat("  Min:", round(min(df$seasonal, na.rm = TRUE), 0), "\n")
+cat("  Max:", round(max(df$seasonal, na.rm = TRUE), 0), "\n")
+cat("  Amplitude:", round(max(df$seasonal, na.rm = TRUE) - min(df$seasonal, na.rm = TRUE), 0), "\n\n")
+
+cat("Remainder (Unexplained Variance):\n")
+cat("  Std Dev:", round(sd(df$remainder, na.rm = TRUE), 0), "\n")
+cat("  Interpretation: Random fluctuations not explained by trend or seasonality\n")
+```
+
+## Descriptive Statistics by Period
+```{r Creating periods}
+df <- df %>%
+  mutate(
+    year = year(date),
+    quarter = quarter(date),
+    year_quarter = paste0(year, "-Q", quarter)
+  )
+
+cat("✓ Periods defined\n")
+```
+
+```{r Statistics by Year and Quarter, echo=FALSE}
+cat("\n=== STATISTICS BY YEAR ===\n\n")
+
+yearly_stats <- df %>%
+  group_by(year) %>%
+  summarise(
+    Total_Cases = sum(new_cases, na.rm = TRUE),
+    Avg_Daily_Cases = mean(new_cases, na.rm = TRUE),
+    Peak_Cases = max(new_cases, na.rm = TRUE),
+    Total_Deaths = sum(new_deaths, na.rm = TRUE),
+    Avg_Vaccination_Rate = mean(vaccination_rate, na.rm = TRUE),
+    .groups = 'drop'
+  ) %>%
+  mutate(across(where(is.numeric), round, 2))
+
+print(yearly_stats)
+
+cat("\n\n=== STATISTICS BY QUARTER ===\n\n")
+
+quarterly_stats <- df %>%
+  group_by(year_quarter) %>%
+  summarise(
+    Total_Cases = sum(new_cases, na.rm = TRUE),
+    Avg_Daily_Cases = mean(new_cases, na.rm = TRUE),
+    Peak_Cases = max(new_cases, na.rm = TRUE),
+    Total_Deaths = sum(new_deaths, na.rm = TRUE),
+    Avg_Vaccination_Rate = mean(vaccination_rate, na.rm = TRUE),
+    .groups = 'drop'
+  ) %>%
+  mutate(across(where(is.numeric), round, 2))
+
+print(quarterly_stats)
+```
+
+## Hypothesis Tests
+```{r Hypothesis Tests}
+separator <- paste(rep("=", 60), collapse = "")
+
+cat("\n", separator, "\n")
+cat("HYPOTHESIS TESTS\n")
+cat(separator, "\n\n")
+
+# Test 1: Are vaccination rates associated with case rates?
+cat("HYPOTHESIS 1: Vaccination Rate and Case Rate Relationship\n")
+cat("-", sep = "-", nchar("HYPOTHESIS 1: Vaccination Rate and Case Rate Relationship")-1, "\n\n")
+
+# Create lagged vaccination (previous week's vaccination rate)
+df_lagged <- df %>%
+  mutate(vax_lag_7 = lag(vaccination_rate, 7)) %>%
+  filter(!is.na(vax_lag_7))
+
+model_1 <- lm(new_cases ~ vax_lag_7, data = df_lagged)
+summary_1 <- summary(model_1)
+
+cat("Model: New Cases ~ Vaccination Rate (lagged 7 days)\n")
+cat("Intercept:", round(coef(model_1)[1], 2), "\n")
+cat("Slope:", round(coef(model_1)[2], 4), "\n")
+cat("R-squared:", round(summary_1$r.squared, 4), "\n")
+cat("P-value:", format(summary_1$coefficients[2, 4], scientific = TRUE), "\n")
+cat("Result:", ifelse(summary_1$coefficients[2, 4] < 0.05, 
+                      "SIGNIFICANT ✓", "NOT SIGNIFICANT"), "\n\n")
+
+# Test 2: Seasonality in cases
+cat("HYPOTHESIS 2: Seasonal Pattern in Cases\n")
+cat("-", sep = "-", nchar("HYPOTHESIS 2: Seasonal Pattern in Cases")-1, "\n\n")
+
+df_by_month <- df %>%
+  mutate(month = month(date)) %>%
+  group_by(month) %>%
+  summarise(avg_cases = mean(new_cases, na.rm = TRUE), .groups = 'drop')
+
+# ANOVA test
+anova_test <- aov(new_cases ~ as.factor(month(date)), data = df)
+anova_summary <- summary(anova_test)
+
+cat("Analysis of Variance (ANOVA)\n")
+cat("F-statistic:", round(anova_summary[[1]]$`F value`[1], 4), "\n")
+cat("P-value:", format(anova_summary[[1]]$`Pr(>F)`[1], scientific = TRUE), "\n")
+cat("Result:", ifelse(anova_summary[[1]]$`Pr(>F)`[1] < 0.05, 
+                      "SIGNIFICANT ✓ (Seasonal pattern exists)", 
+                      "NOT SIGNIFICANT (No clear seasonality)"), "\n\n")
+
+# Test 3: Relationship between cases and deaths
+cat("HYPOTHESIS 3: Case Fatality Rate Trend\n")
+cat("-", sep = "-", nchar("HYPOTHESIS 3: Case Fatality Rate Trend")-1, "\n\n")
+
+cfr_model <- lm(case_fatality_rate ~ as.numeric(date), data = df)
+cfr_summary <- summary(cfr_model)
+
+cat("Model: Case Fatality Rate ~ Time\n")
+cat("Slope (% per day):", round(coef(cfr_model)[2], 6), "\n")
+cat("P-value:", format(cfr_summary$coefficients[2, 4], scientific = TRUE), "\n")
+cat("R-squared:", round(cfr_summary$r.squared, 4), "\n")
+
+if(cfr_summary$coefficients[2, 4] < 0.05) {
+  direction <- ifelse(coef(cfr_model)[2] > 0, "INCREASING", "DECREASING")
+  cat("Result: CFR is SIGNIFICANTLY", direction, "\n")
+} else {
+  cat("Result: No significant change in CFR over time\n")
+}
+
+cat("\n", separator, "\n")
+```
+
+## Key Findings
+```{r, echo=FALSE}
+separator <- paste(rep("=", 60), collapse = "")
+
+cat("\n", separator, "\n")
+cat("KEY STATISTICAL FINDINGS\n")
+cat(separator, "\n\n")
+
+cat("1. CORRELATION INSIGHTS\n")
+cat("   • Strongest correlation with new cases:", 
+    names(cases_corr)[2], 
+    "r =", round(cases_corr[2], 4), "\n")
+cat("   • Cases-Deaths correlation:", round(corr_test2$estimate, 4), 
+    "(p <", format(corr_test2$p.value, digits = 2), ")\n")
+cat("   • Vaccination-CFR correlation:", round(corr_test3$estimate, 4), "\n\n")
+
+cat("2. TREND ANALYSIS\n")
+cat("   • Overall trend slope:", round(coef(trend_model)[2], 4), "cases/day\n")
+cat("   • Recent change:", ifelse(pct_change > 0, 
+                                    paste0("+", round(pct_change, 2), "%"), 
+                                    paste0(round(pct_change, 2), "%")), "\n")
+cat("   • Trend direction:", ifelse(slope > 0, "INCREASING ↑", "DECREASING ↓"), "\n\n")
+
+cat("3. SEASONALITY\n")
+cat("   • Seasonal pattern detected:", 
+    ifelse(anova_summary[[1]]$`Pr(>F)`[1] < 0.05, "YES ✓", "NO"), "\n")
+cat("   • Peak month (avg cases):", 
+    month.abb[df_by_month$month[which.max(df_by_month$avg_cases)]], "\n\n")
+
+cat("4. CASE FATALITY RATE\n")
+cat("   • Current CFR:", round(tail(df$case_fatality_rate, 1), 4), "%\n")
+cat("   • CFR trend:", ifelse(cfr_summary$coefficients[2, 4] < 0.05,
+                               "SIGNIFICANT", "NOT SIGNIFICANT"), "\n")
+cat("   • Direction:", ifelse(coef(cfr_model)[2] > 0, 
+                               "INCREASING ↑", "DECREASING ↓"), "\n\n")
+
+cat(separator, "\n")
+```
+
+## Session Information
+```{r}
+sessionInfo()
+```
